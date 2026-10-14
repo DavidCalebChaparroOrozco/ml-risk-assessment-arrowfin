@@ -70,3 +70,95 @@ Ordered strictly by the robust metric z in View A (Full Mark-to-Market including
 ## 7. System Verification Log
 *   **Verified:** Mathematical redundancy and invalidation of `z_rel`. Exact composition of losses, signs, and Z-scores for T-020 across both View A and View B. Segregation of nominal versus operational risk criteria.
 *   **Pending:** Cross-verification of market mark feeds on MCL against the moving average, and raw physical contract multipliers for T-023's open position in CL. The engine structure is locked, waiting only for data infrastructure confirmations.
+
+## 8. TASK 2 - Labels and Evaluation
+
+### (a) Labeling Strategy for "Bad Sessions"
+*   **Defensible Definition:** A "bad session" is defined as any operational session where a trader's standardized robust score (z) falls below -3.0 (representing a severe statistical tail event tailored to their individual volatility profile), OR any session where a strict contractual limit breach occurs (e.g., maximum simultaneous position exceeded). This separates statistical underperformance from structural risk rule violations.
+*   **Ambiguity Zones:** Ambiguity arises when a trader suffers a large nominal dollar loss due to a sudden, unprecedented market gap (e.g., an extreme macro event), while operating within normal sizing limits. In this scenario, the model flags an anomaly, but it reflects market conditions rather than trader degradation or rogue behavior.
+*   **Inter-Rater Reliability Test:** To ensure two analysts agree independently, we enforce a strict programmatic logic tree. If a session is analyzed manually, we apply a double-blind review process and calculate Cohen's Kappa coefficient. Any score below 0.85 triggers a third-party arbitration review.
+*   **First Model Sketch:**
+    *   **Features:** Rolling historical drawdown, percentage of fills executed outside standard hours, maximum rolling contract size versus allocation limit, and hourly position concentration.
+    *   **Target:** Binary classification (1 for Anomaly/Limit Breach, 0 for Standard Session).
+    *   **Validation Split:** We strictly prohibit random K-fold splits due to temporal dependencies. We utilize a **Time-Series Split (Forward Chaining)**: Training on sessions 1–6, validating on session 7; then training on 1–7, validating on session 8. This guarantees no future data leaks into past predictions.
+
+### (b) Evaluation Metrics & Risks
+*   **Metrics:** We measure the Top-10 Precision (Precision@10), ensuring that the accounts flagged are high-priority targets for intervention, and the False Negative Rate (FNR) to ensure no blowing-up accounts slip through.
+*   **Missing Data in Current Dataset:** The dataset lacks **real-time liquidity depth (order book logs)** and **historical account liquidation events**. Without knowing when an account was *actually* forced-liquidated by the system, our metrics are proxies rather than definitive operational truths.
+*   **Data Leakage Vulnerability:** A massive potential leak would occur if we calculate the global `floor` or the trader's median/MAD parameters using the *entire* dataset (including today's data) before performing historical scoring. Today's massive collapse would artificially inflate the historical volatility threshold, compressing past anomalies and making today's performance look less extreme than it truly is.
+
+---
+
+## 9. TASK 4 - Code Review: Pull Request Evaluation
+
+### Code Under Review
+```python
+POINT_VALUE = 20
+
+def session_features(sessions):
+    """
+      sessions: one dict per (trader, session) with net_pnl, fills,
+      qty_total, avg_price, minutes_active - ordered by session_date.
+    """
+    rows = []
+    for i, s in enumerate(sessions):
+        hist = sessions[:i + 1]
+        avg_pnl = sum(h["net_pnl"] for h in hist) / len(hist)
+        rows.append({
+            "trader_id": s["trader_id"],
+            "session_date": s["session_date"],
+            "notional": s["qty_total"] * s["avg_price"] * POINT_VALUE,
+            "avg_session_pnl": avg_pnl,
+            "pace": s["fills"] / s["minutes_active"],
+            "label_bad": s["net_pnl"] < -1000,
+        })
+    return rows
+```
+
+**Review Status:** ❌ **REQUEST CHANGES (DO NOT MERGE)**
+
+Hi colleague, thank you for submitting this feature engineering function. I have conducted a critical review of the logic and **cannot approve this Pull Request for deployment** due to architectural flaws and data leakage constraints that will severely bias any downstream predictive models.
+
+### Critical Blockers (Must Fix Before Release)
+1. **Data Leakage via Future Look-Ahead (`sessions[:i + 1]`):**
+   * *The Issue:* The historical slice `hist = sessions[:i + 1]` includes the current session `s` inside the calculation. Consequently, when computing `avg_pnl`, today's performance leaks directly into the historical feature (`avg_session_pnl`). A model training on this will learn to cheat by sniffing the target day's outcome.
+   * *The Fix:* Change the slice to `sessions[:i]` to ensure features are strictly built on *prior* historical data.
+2. **Runtime ZeroDivisionError Risk (`pace` calculation):**
+   * *The Issue:* If a trader logs into a session but experiences an immediate connection failure or data pipeline dropout leading to `minutes_active == 0`, the calculation `s["fills"] / s["minutes_active"]` will trigger a terminal `ZeroDivisionError` and crash the execution pipeline.
+   * *The Fix:* Use a conditional ternary operator to handle edge cases safely: `s["fills"] / s["minutes_active"] if s["minutes_active"] > 0 else 0`.
+3. **Flawed Absolute Target Definition (`label_bad`):**
+   * *The Issue:* Hardcoding a rigid threshold of `s["net_pnl"] < -1000` is fundamentally flawed for risk management. A loss of \$1,000 might represent catastrophic over-leveraging for a small retail allocation, yet be negligible noise for an institutional account. This completely misses the core mandate of the assessment: defining anomalies *relative to each individual trader's historic baseline*.
+
+### Optimization & Quality Feedback (Non-Blocking Nits)
+* **Performance Bottleneck - O(N²) Algorithmic Complexity:** Calling `sum(...)` over an expanding list inside a sequential loop creates a quadratic time complexity. As trading histories grow over thousands of sessions, this will severely throttle production speeds. Please refactor this utilizing a linear cumulative sum (`pandas.Series.cumsum()` or an iterative tracking variable) to drop the complexity to O(N).
+* **Asset Multiplier Assumption:** Hardcoding `POINT_VALUE = 20` assumes all sessions belong to an instrument with a fixed contract scale (like E-mini S&P futures). If a trader operates across multiple assets (e.g., Micro contracts or Crude Oil), this single constant will distort the true nominal exposure calculation. This mapping should be dynamic, pulling directly from the underlying instruments metadata registry.
+
+---
+
+## 10. TASK 5 - Subject: Re: Funded Trader Contesting Flag - Account T-020
+Subject: Re: Funded Trader Contesting Flag - Account T-020
+
+Thank you for sharing your concerns regarding trader T-020. 
+Following a detailed review of the transaction data, our analysis confirms a significant deviation from the trader’s historical performance baseline.
+
+The trader recorded a total net loss of $2,397.65, including $2,076.25 outside standard historical trading hours, increasing overnight liquidity risk. 
+During standard trading hours, the trader also incurred a loss of $290.60, compared with a historical median gain of $6.60, resulting in an anomaly score of -2.67.
+
+These findings indicate an unusual deterioration in performance across both periods, despite daytime trading patterns remaining consistent with historical habits. 
+Based on this evidence, we recommend maintaining the risk flag in accordance with the established risk tolerance framework.
+
+We would be happy to arrange a brief call with the account manager today to review the findings and address any questions.
+
+Best regards,
+
+David Caleb Chaparro Orozco
+
+---
+
+## 11. TASK 6 - Post-Mortem Reflection
+
+### Proudest Decision & Cost Paid
+I am proudest of rejecting the automated LLM recommendation to exclude `closed` and `restricted` accounts from our dataset, forcing a realistic data curation process instead. The price paid for this decision was an intensive manual structural analysis of the transaction logs and a complete rework of our scaling algorithms to handle incomplete sessions. However, this saved the model from a terminal survivorship bias that would have blinded the Risk Desk to the accounts that posed the highest structural threat.
+
+### Next Steps & Pre-requisites
+With a second day of work, I would build automated tests for edge-case FIFO inventory matching (e.g., partial stock/future splits or sudden position transfers). Before starting, I would require an explicit confirmation of contract unit mappings (Mini vs. Micro multipliers) from your infrastructure team, alongside the true API documentation for market mark prices to eliminate any data-feed discrepancies.
