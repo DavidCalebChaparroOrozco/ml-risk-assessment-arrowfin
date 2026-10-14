@@ -162,3 +162,21 @@ I am proudest of rejecting the automated LLM recommendation to exclude `closed` 
 
 ### Next Steps & Pre-requisites
 With a second day of work, I would build automated tests for edge-case FIFO inventory matching (e.g., partial stock/future splits or sudden position transfers). Before starting, I would require an explicit confirmation of contract unit mappings (Mini vs. Micro multipliers) from your infrastructure team, alongside the true API documentation for market mark prices to eliminate any data-feed discrepancies.
+
+---
+
+## 12 Task 3: Risk Desk Presentation Commentary
+
+![alt text](images/1_Measure-risk-against-each-traders-normal-behavior.png)
+
+### Core Methodology: Tailoring Alarms to the Driver, Not the Car
+*   **The Problem:** If we only look at big losses, we only catch large institutional accounts, missing smaller traders who are currently over-leveraging and about to blow up their accounts.
+*   **Our Solution:** We built a "Robust Volatility Score" for each trader. Instead of looking at raw dollars, we measure how far today's performance deviates from that specific trader's historical normal behavior.
+*   **The Filter:** We established a strict mathematical criteria (Standardized Deviation Score) to rank the top 10 most anomalous profiles. This acts as a smart filter, filtering out standard market noise and isolating behavior that points to capital exhaustion or rogue trading.
+
+![alt text](images/2_dollar29369.png)
+
+### Critical Alerts & Operational Violations for Today
+*   **The Systemic Collapse:** Today was a market-wide failure event. The active portfolio lost an aggregate of -$29,369, with 81% of all active traders ending the day in the red.
+*   **The Top Outliers:** Traders T-018 and T-019 are currently exhibiting extreme tail-risk behavior, deviating past 8 historical standard measures from their usual behavior.
+*   **Operational Risk vs. Statistical Risk:** We have separated pure contract size rule-breakers from profit-and-loss anomalies. For example, T-013 is stable in terms of dollar losses but repeatedly breached contractual size limits (7 times today alone), representing a critical compliance hazard that requires immediate manual suspension.
