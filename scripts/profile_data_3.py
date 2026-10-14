@@ -29,7 +29,7 @@ section("A. Cuentas closed / restricted / balance 0: ¿cuándo operaron?")
 for acc in ["ACC-2053", "ACC-2054", "ACC-2028"]:
     f = fills[fills["account_id"] == acc]
     print(acc, f["status"].iloc[0], "| fills por sesión:",
-          {str(k): v for k, v in f.groupby("session").size().items()})
+            {str(k): v for k, v in f.groupby("session").size().items()})
     print("   primer fill:", f["ct"].min(), "| último:", f["ct"].max())
 
 section("B. Cuentas múltiples: ¿fills idénticos entre cuentas del mismo trader?")
@@ -43,11 +43,11 @@ for tr in counts[counts > 1].index:
     for i in range(len(accs)):
         for j in range(i + 1, len(accs)):
             print(tr, accs[i], accs[j], "| fills con misma clave:",
-                  len(sets[accs[i]] & sets[accs[j]]), "de", len(sets[accs[i]]))
+                    len(sets[accs[i]] & sets[accs[j]]), "de", len(sets[accs[i]]))
 print("\nT-018, primeros fills:")
 print(fills[fills["trader_id"] == "T-018"]
       [["ct", "account_id", "instrument_symbol", "side", "quantity", "price", "order_id"]]
-      .head(9).to_string(index=False))
+        .head(9).to_string(index=False))
 
 section("C. Fills de hoy fuera de la ventana horaria histórica")
 hist = fills[fills["session"] < today]
@@ -57,6 +57,6 @@ t = fills[fills["session"] == today].copy()
 t["fuera"] = (minutes(t["ct"]) < lo) | (minutes(t["ct"]) > hi)
 print("fills de hoy fuera de ventana:", int(t["fuera"].sum()), "de", len(t))
 print("traders con al menos 1 fuera de ventana:",
-      t.loc[t["fuera"], "trader_id"].nunique(), "de", t["trader_id"].nunique())
+        t.loc[t["fuera"], "trader_id"].nunique(), "de", t["trader_id"].nunique())
 print("top 10 traders por fills fuera de ventana:",
-      t.groupby("trader_id")["fuera"].sum().sort_values(ascending=False).head(10).to_dict())
+        t.groupby("trader_id")["fuera"].sum().sort_values(ascending=False).head(10).to_dict())
